@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Webhook Form Builder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
+  <link rel="stylesheet" href="./css/style.css"/>
+  <style>
+    /* Tell browser this UI is dark — fixes native dropdown OS colors */
+    :root { color-scheme: dark; }
+    body.light-theme { color-scheme: light; }
+  </style>
+</head>
+<body>
+<div class="app-frame">
+
+  <!-- TOP BAR -->
+  <header class="topbar glass-panel">
+    <div class="topbar-brand">
+      <div class="brand-mark">WF</div>
+      <div>
+        <p class="eyebrow">Webhook Studio</p>
+        <h1>Webhook Form Builder</h1>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button id="themeToggle" class="secondary-button compact-button">Theme</button>
+      <button id="saveTemplateBtn" class="secondary-button compact-button">Save Template</button>
+      <button id="submitWebhookBtn" class="primary-button compact-button">Submit to Webhook</button>
+    </div>
+  </header>
+
+  <div class="app-shell">
+
+    <!-- LEFT SIDEBAR -->
+    <aside class="left-panel glass-panel">
+      <p class="eyebrow" style="padding:0 2px 6px">Settings</p>
+
+      <div class="sidebar-section">
+        <div class="section-title-row">
+          <h3>Webhook</h3>
+          <button id="saveWebhookBtn" class="secondary-button compact-button">Save</button>
+        </div>
+        <label class="field-label" for="webhookUrl">Webhook URL</label>
+        <input id="webhookUrl" class="app-input" type="url" placeholder="https://n8n.example.com/webhook/..."/>
+      </div>
+
+      <div class="sidebar-section">
+        <h3 class="section-label">Templates</h3>
+        <label class="field-label" for="templateSelect">Saved templates</label>
+        <div class="select-wrap">
+          <select id="templateSelect" class="app-input app-select"></select>
+          <span class="select-arrow">▾</span>
+        </div>
+        <div class="button-row" style="margin-top:4px">
+          <button id="loadTemplateBtn" class="secondary-button" style="flex:1">Load</button>
+          <button id="deleteTemplateBtn" class="secondary-button danger-button" style="flex:1">Delete</button>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <h3 class="section-label">Options</h3>
+        <label class="field-label" for="imageMode">File Encoding</label>
+        <div class="select-wrap">
+          <select id="imageMode" class="app-input app-select">
+            <option value="base64">Base64 JSON</option>
+            <option value="binary">Binary Array JSON</option>
+            <option value="multipart">Multipart FormData</option>
+          </select>
+          <span class="select-arrow">▾</span>
+        </div>
+        <label class="field-label" style="margin-top:8px">Accent Color</label>
+        <input id="accentColor" class="color-input" type="color" value="#6366f1"/>
+        <label class="toggle-row" style="margin-top:6px">
+          <input id="animationsToggle" type="checkbox" checked/>
+          <span>Smooth animations</span>
+        </label>
+      </div>
+
+      <div class="sidebar-section">
+        <h3 class="section-label">Actions</h3>
+        <button id="newFormBtn" class="secondary-button side-btn">New Form</button>
+        <button id="exportBtn" class="secondary-button side-btn">Export JSON</button>
+        <label class="secondary-button side-btn file-label">
+          Import JSON
+          <input id="importInput" type="file" accept="application/json" hidden/>
+        </label>
+      </div>
+    </aside>
+
+    <!-- BUILDER -->
+    <main class="builder-column">
+      <div class="glass-panel toolbar-panel">
+        <p class="eyebrow" style="margin-bottom:8px">Add Field</p>
+        <div class="toolbar-grid" id="fieldToolbar">
+          <button type="button" class="toolbar-button" data-add-field="text">Text</button>
+          <button type="button" class="toolbar-button" data-add-field="number">Number</button>
+          <button type="button" class="toolbar-button" data-add-field="email">Email</button>
+          <button type="button" class="toolbar-button" data-add-field="textarea">Textarea</button>
+          <button type="button" class="toolbar-button" data-add-field="select">Select</button>
+          <button type="button" class="toolbar-button" data-add-field="checkbox">Checkbox</button>
+          <button type="button" class="toolbar-button" data-add-field="image">Image</button>
+          <button type="button" class="toolbar-button" data-add-field="file">File</button>
+          <button type="button" class="toolbar-button" data-add-field="group">Group</button>
+          <button type="button" class="toolbar-button" data-add-field="array">Array</button>
+        </div>
+      </div>
+
+      <div class="glass-panel builder-panel">
+        <div class="section-title-row" style="margin-bottom:10px">
+          <div><p class="eyebrow">Schema</p><h3>Form Fields</h3></div>
+          <span class="badge">Drag to reorder</span>
+        </div>
+        <div id="builderCanvas" class="builder-canvas"></div>
+      </div>
+    </main>
+
+    <!-- PREVIEW + PAYLOAD -->
+    <section class="preview-column">
+      <div class="glass-panel preview-panel">
+        <div class="section-title-row" style="margin-bottom:10px">
+          <div><p class="eyebrow">Preview</p><h3>Live Form</h3></div>
+          <span class="badge badge-accent">Ready</span>
+        </div>
+        <form id="previewForm" class="preview-form" onsubmit="return false"></form>
+      </div>
+
+      <div class="glass-panel json-panel">
+        <div class="section-title-row" style="margin-bottom:8px">
+          <div><p class="eyebrow">Payload</p><h3>Live JSON</h3></div>
+          <div class="button-row">
+            <button id="formatJsonBtn" class="secondary-button compact-button">Format</button>
+            <button id="applyJsonBtn" class="primary-button compact-button">Apply</button>
+            <button id="copyJsonBtn" class="secondary-button compact-button">Copy</button>
+            <button id="downloadJsonBtn" class="secondary-button compact-button">Download</button>
+          </div>
+        </div>
+        <div class="json-hint">Edit JSON directly — click <strong>Apply</strong> to sync to form</div>
+        <textarea id="jsonPreview" class="json-editor" spellcheck="false"></textarea>
+      </div>
+    </section>
+
+    <!-- RESPONSE -->
+    <aside class="right-panel glass-panel">
+      <div class="section-title-row" style="margin-bottom:8px">
+        <div><p class="eyebrow">Response</p><h3>Webhook</h3></div>
+        <button id="clearResponsesBtn" class="secondary-button compact-button">Clear</button>
+      </div>
+      <div class="segment-control" id="responseTabs">
+        <button type="button" class="segment-button is-active" data-view="pretty">Pretty</button>
+        <button type="button" class="segment-button" data-view="raw">Raw</button>
+        <button type="button" class="segment-button" data-view="cards">Cards</button>
+      </div>
+      <div id="responseMeta"><div class="empty-state">Submit a payload to see the response.</div></div>
+      <div id="responseBody" class="response-body"></div>
+      <div class="sidebar-section" style="margin-top:8px">
+        <h3 class="section-label">Recent</h3>
+        <div id="responseHistory" class="history-list"></div>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<div id="toastStack" class="toast-stack" aria-live="polite"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// UTILITIES
+// ─────────────────────────────────────────────
+function esc(v) {
+  return String(v==null?'':v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function makeId() { return 'f_' + Math.random().toString(36).slice(2,9); }
+function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+function getPath(obj, path) {
+  return path.replace(/\[(\d+)\]/g,'.$1').split('.').filter(Boolean)
+    .reduce((cur,k)=>cur==null?undefined:cur[k], obj);
+}
+function setPath(obj, path, val) {
+  const tokens = path.replace(/\[(\d+)\]/g,'.$1').split('.').filter(Boolean);
+  let cur = obj;
+  tokens.forEach((k,i)=>{
+    if(i===tokens.length-1){cur[k]=val;return;}
+    const nk=tokens[i+1];
+    if(cur[k]==null) cur[k]=isNaN(nk)?{}:[];
+    cur=cur[k];
+  });
+}
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+const DEFAULT_TEMPLATES = [
+  { id:'lead', name:'Lead Capture', webhookUrl:'', fields:[
+    {id:'fl1',type:'text',label:'Full Name',key:'fullName',required:true,children:[]},
+    {id:'fl2',type:'email',label:'Email',key:'email',required:true,children:[]},
+    {id:'fl3',type:'textarea',label:'Requirements',key:'requirements',required:false,children:[]}
+  ]},
+  { id:'intake', name:'Client Intake', webhookUrl:'', fields:[
+    {id:'fi1',type:'group',label:'Client',key:'client',required:false,children:[
+      {id:'fi2',type:'text',label:'Company',key:'company',required:true,children:[]},
+      {id:'fi3',type:'text',label:'Phone',key:'phone',required:false,children:[]}
+    ]}
+  ]}
+];
+
+const FIELD_TYPES = ['text','number','email','textarea','select','checkbox','image','file','group','array'];
+
+function loadState() {
+  try { const r=localStorage.getItem('wfb'); return r?JSON.parse(r):null; } catch{return null;}
+}
+function saveState() {
+  try { localStorage.setItem('wfb',JSON.stringify({
+    webhookUrl:S.webhookUrl, fields:S.fields,
+    settings:S.settings, templates:S.templates,
+    responses:S.responses.slice(0,8)
+  })); } catch{}
+}
+
+const stored = loadState();
+const S = {
+  webhookUrl: stored?.webhookUrl||'',
+  fields: stored?.fields||[],
+  formData: {},
+  selectedId: null,
+  filePreviews: {},
+  activeResponse: null,
+  responseView: 'pretty',
+  responses: stored?.responses||[],
+  settings: {theme:'light', accentColor:'#6366f1', animations:true, imageMode:'base64', ...(stored?.settings||{})},
+  templates: stored?.templates?.length ? stored.templates : deepClone(DEFAULT_TEMPLATES)
+};
+
+// ─────────────────────────────────────────────
+// FIELD FACTORIES
+// ─────────────────────────────────────────────
+function makeField(type) {
+  const id = makeId();
+  const base = {id, type, label: type.charAt(0).toUpperCase()+type.slice(1)+' Field',
+    key: type+'_'+id.slice(-4), required:false, children:[]};
+  if(type==='select') base.options=['Option A','Option B','Option C'];
+  if(type==='group'){base.label='Group';base.key='group_'+id.slice(-4);}
+  if(type==='array'){base.label='Array';base.key='array_'+id.slice(-4);}
+  return base;
+}
+
+// ─────────────────────────────────────────────
+// FORM DATA SYNC
+// ─────────────────────────────────────────────
+function defaultVal(field) {
+  if(field.type==='group') return syncGroupData(field,{});
+  if(field.type==='array') return [syncGroupData(field,{})];
+  if(field.type==='checkbox') return false;
+  return '';
+}
+function syncGroupData(field, cur) {
+  const base = cur&&typeof cur==='object'?{...cur}:{};
+  (field.children||[]).forEach(c=>{
+    if(base[c.key]===undefined) base[c.key]=defaultVal(c);
+    if(c.type==='group') base[c.key]=syncGroupData(c,base[c.key]);
+    if(c.type==='array') base[c.key]=Array.isArray(base[c.key])&&base[c.key].length?base[c.key]:[syncGroupData(c,{})];
+  });
+  return base;
+}
+function syncFormData() {
+  const next={};
+  S.fields.forEach(f=>{
+    next[f.key]=S.formData[f.key]!==undefined?S.formData[f.key]:defaultVal(f);
+    if(f.type==='group') next[f.key]=syncGroupData(f,next[f.key]);
+    if(f.type==='array'){
+      const rows=Array.isArray(next[f.key])&&next[f.key].length?next[f.key]:[syncGroupData(f,{})];
+      next[f.key]=rows.map(r=>syncGroupData(f,r));
+    }
+  });
+  S.formData=next;
+}
+
+// ─────────────────────────────────────────────
+// FIELD TREE HELPERS
+// ─────────────────────────────────────────────
+function findField(id, fields=S.fields) {
+  for(const f of fields){ if(f.id===id)return f; const c=findField(id,f.children||[]); if(c)return c; }
+  return null;
+}
+function removeField(id, fields=S.fields) {
+  const i=fields.findIndex(f=>f.id===id);
+  if(i>=0){fields.splice(i,1);return true;}
+  return fields.some(f=>removeField(id,f.children||[]));
+}
+function insertAfter(id, newF, fields=S.fields) {
+  const i=fields.findIndex(f=>f.id===id);
+  if(i>=0){fields.splice(i+1,0,newF);return true;}
+  return fields.some(f=>insertAfter(id,newF,f.children||[]));
+}
+
+// ─────────────────────────────────────────────
+// RENDER — BUILDER SCHEMA
+// ─────────────────────────────────────────────
+function renderBuilder() {
+  const canvas = document.getElementById('builderCanvas');
+  if(!S.fields.length){
+    canvas.innerHTML='<div class="empty-builder">Click a field type above to start building.</div>';
+    return;
+  }
+  canvas.innerHTML = '<div class="nested-fields" data-pid="">' +
+    S.fields.map(f=>renderCard(f)).join('') + '</div>';
+  initSortable(canvas);
+}
+
+function renderCard(field) {
+  const sel = field.id===S.selectedId?'is-selected':'';
+  const childHtml = (field.type==='group'||field.type==='array') ? `
+    <div class="nested-builder">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <strong style="font-size:.75rem">${field.type==='group'?'Nested fields':'Array item fields'}</strong>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+        ${FIELD_TYPES.map(t=>`<button type="button" class="array-button" data-addchild="${field.id}" data-childtype="${t}">+ ${t}</button>`).join('')}
+      </div>
+      <div class="nested-fields" data-pid="${field.id}">
+        ${(field.children||[]).map(c=>renderCard(c)).join('')}
+      </div>
+    </div>` : '';
+
+  return `<article class="field-card ${sel}" data-fid="${field.id}">
+    <div class="field-card-header">
+      <div class="field-card-title">
+        <span class="drag-handle">::</span>
+        <div>
+          <strong>${esc(field.label||'Untitled')}</strong>
+          <span class="field-pill">${field.type}</span>
+        </div>
+      </div>
+      <div class="button-row">
+        <button type="button" class="icon-button" data-dup="${field.id}">Copy</button>
+        <button type="button" class="icon-button" data-del="${field.id}">Del</button>
+      </div>
+    </div>
+    <div class="field-card-body">
+      <div class="card-grid-slim">
+        <label>
+          <span class="field-label">Label</span>
+          <input class="app-input" data-prop="label" data-fid="${field.id}" value="${esc(field.label)}"/>
+        </label>
+        <label>
+          <span class="field-label">JSON Key</span>
+          <input class="app-input" data-prop="key" data-fid="${field.id}" value="${esc(field.key)}"/>
+        </label>
+        <label class="inline-toggle-slim">
+          <input type="checkbox" data-prop="required" data-fid="${field.id}" ${field.required?'checked':''}/>
+          <span>Required</span>
+        </label>
+      </div>
+      ${childHtml}
+    </div>
+  </article>`;
+}
+
+// ─────────────────────────────────────────────
+// RENDER — PREVIEW FORM
+// ─────────────────────────────────────────────
+function renderPreview() {
+  const form = document.getElementById('previewForm');
+  if(!S.fields.length){
+    form.innerHTML='<div class="empty-builder">Form preview appears here once you add fields.</div>';
+    return;
+  }
+  form.innerHTML = '<div class="preview-grid">' + S.fields.map(f=>renderPreviewField(f,S.formData[f.key],f.key)).join('') + '</div>';
+}
+
+function renderPreviewField(field, value, path) {
+  if(field.type==='group'){
+    return `<div class="group-preview span-12">
+      <div class="group-preview-head"><h4>${esc(field.label)}</h4><span class="badge">Object</span></div>
+      <div class="preview-grid">${(field.children||[]).map(c=>renderPreviewField(c,value?.[c.key]??'',path+'.'+c.key)).join('')}</div>
+    </div>`;
+  }
+  if(field.type==='array'){
+    const rows=Array.isArray(value)?value:[];
+    return `<div class="group-preview span-12">
+      <div class="group-preview-head">
+        <div><h4>${esc(field.label)}</h4><small class="field-note">Repeatable</small></div>
+        <button type="button" class="array-button" data-array-add="${path}">+ Add row</button>
+      </div>
+      ${rows.map((row,i)=>`
+        <div class="array-item-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <strong style="font-size:.75rem">Item ${i+1}</strong>
+            <button type="button" class="array-button" data-array-remove="${path}" data-idx="${i}">Remove</button>
+          </div>
+          <div class="preview-grid">${(field.children||[]).map(c=>renderPreviewField(c,row?.[c.key]??'',`${path}[${i}].${c.key}`)).join('')}</div>
+        </div>`).join('')}
+    </div>`;
+  }
+  if(field.type==='checkbox'){
+    return `<label class="preview-field span-12 checkbox-field">
+      <input type="checkbox" data-path="${path}" ${value?'checked':''}/>
+      <span>${esc(field.label)}${field.required?' *':''}</span>
+    </label>`;
+  }
+  if(field.type==='textarea'){
+    return `<label class="preview-field span-12">
+      <span class="field-label">${esc(field.label)}${field.required?' *':''}</span>
+      <textarea class="app-textarea" data-path="${path}" rows="3">${esc(value??'')}</textarea>
+    </label>`;
+  }
+  if(field.type==='select'){
+    return `<label class="preview-field span-12">
+      <span class="field-label">${esc(field.label)}${field.required?' *':''}</span>
+      <div class="select-wrap">
+        <select class="app-input app-select" data-path="${path}">
+          <option value="">Select…</option>
+          ${(field.options||[]).map(o=>`<option value="${esc(o)}" ${value===o?'selected':''}>${esc(o)}</option>`).join('')}
+        </select>
+        <span class="select-arrow">▾</span>
+      </div>
+    </label>`;
+  }
+  if(field.type==='image'||field.type==='file'){
+    const prev=S.filePreviews[path];
+    return `<div class="preview-field span-12">
+      <label class="field-label">${esc(field.label)}${field.required?' *':''}</label>
+      <label class="file-drop">
+        <span class="file-drop-icon">${field.type==='image'?'IMG':'FILE'}</span>
+        <strong>${field.type==='image'?'Drop or browse an image':'Drop or browse a file'}</strong>
+        <input type="file" ${field.type==='image'?'accept="image/*"':''} data-path="${path}" data-filekind="${field.type}"/>
+      </label>
+      ${prev?`<div class="file-chip">${prev.url?`<img src="${esc(prev.url)}" alt="${esc(prev.name)}"/>`:''}
+        <span>${esc(prev.name)}</span></div>`:''}
+    </div>`;
+  }
+  const itype=field.type==='email'?'email':field.type==='number'?'number':'text';
+  return `<label class="preview-field span-12">
+    <span class="field-label">${esc(field.label)}${field.required?' *':''}</span>
+    <input class="preview-input" type="${itype}" data-path="${path}" value="${esc(value??'')}"/>
+  </label>`;
+}
+
+// ─────────────────────────────────────────────
+// RENDER — JSON
+// ─────────────────────────────────────────────
+function serializeData(v) {
+  if(v instanceof File) return {name:v.name,type:v.type,size:v.size};
+  if(Array.isArray(v)) return v.map(serializeData);
+  if(v&&typeof v==='object') return Object.fromEntries(Object.entries(v).map(([k,vv])=>[k,serializeData(vv)]));
+  return v;
+}
+function renderJson() {
+  const ta = document.getElementById('jsonPreview');
+  if(document.activeElement===ta) return; // don't overwrite while editing
+  ta.value = JSON.stringify(serializeData(S.formData),null,2);
+  ta.classList.remove('json-error');
+}
+
+// ─────────────────────────────────────────────
+// RENDER — RESPONSE
+// ─────────────────────────────────────────────
+function renderResponse() {
+  const meta = document.getElementById('responseMeta');
+  const body = document.getElementById('responseBody');
+  const hist = document.getElementById('responseHistory');
+  const r = S.activeResponse;
+
+  if(!r){
+    meta.innerHTML='<div class="empty-state">Submit a payload to see the response.</div>';
+    body.innerHTML='';
+  } else {
+    const sc=r.status>=400?'error':'';
+    meta.innerHTML=`<div class="response-card-grid">
+      <div class="response-card"><small>Status</small><strong class="status-pill ${sc}">${r.status} ${esc(r.statusText||'')}</strong></div>
+      <div class="response-card"><small>Time</small><strong>${r.timeMs} ms</strong></div>
+      <div class="response-card"><small>Mode</small><strong>${esc(r.requestMode||'json')}</strong></div>
+      <div class="response-card"><small>Size</small><strong>${r.size} chars</strong></div>
+    </div>`;
+    if(S.responseView==='raw'){
+      body.innerHTML=`<pre class="json-preview">${esc(JSON.stringify(r.data))}</pre>`;
+    } else if(S.responseView==='cards'){
+      const cards=Object.entries(r.headers||{}).map(([k,v])=>`<div class="response-card"><small>${esc(k)}</small><strong>${esc(String(v))}</strong></div>`).join('');
+      body.innerHTML=`<div class="response-card-grid">${cards}</div>`;
+    } else {
+      body.innerHTML=`<pre class="json-preview">${esc(JSON.stringify(r.data,null,2))}</pre>`;
+    }
+  }
+
+  hist.innerHTML = S.responses.length
+    ? S.responses.map((r,i)=>`<button type="button" class="history-item" data-hist="${i}">
+        <strong>${r.status} ${esc(r.statusText||'')}</strong>
+        <small>${new Date(r.receivedAt).toLocaleString()}</small>
+      </button>`).join('')
+    : '<div class="empty-state">No history yet.</div>';
+
+  // Sync tab highlight
+  document.querySelectorAll('#responseTabs [data-view]').forEach(btn=>{
+    btn.classList.toggle('is-active', btn.dataset.view===S.responseView);
+  });
+}
+
+function renderAll() { syncFormData(); renderBuilder(); renderPreview(); renderJson(); renderResponse(); }
+
+// ─────────────────────────────────────────────
+// SORTABLE DRAG & DROP
+// ─────────────────────────────────────────────
+function initSortable(root) {
+  root.querySelectorAll('[data-pid]').forEach(container=>{
+    if(container.dataset.sortableBound) return;
+    container.dataset.sortableBound='1';
+    new Sortable(container,{
+      animation:150, handle:'.drag-handle', group:'builder',
+      onEnd(){
+        const pid=container.dataset.pid||null;
+        const ids=Array.from(container.children).filter(c=>c.dataset.fid).map(c=>c.dataset.fid);
+        const target=pid?findField(pid)?.children:S.fields;
+        if(!target) return;
+        const reordered=ids.map(id=>target.find(f=>f.id===id)).filter(Boolean);
+        target.splice(0,target.length,...reordered);
+        saveState(); renderBuilder();
+      }
+    });
+  });
+}
+
+// ─────────────────────────────────────────────
+// EVENT WIRING
+// ─────────────────────────────────────────────
+
+// Add field toolbar
+document.getElementById('fieldToolbar').addEventListener('click', e=>{
+  const btn=e.target.closest('[data-add-field]');
+  if(!btn) return;
+  const field=makeField(btn.dataset.addField);
+  S.fields.push(field);
+  S.selectedId=field.id;
+  renderAll(); saveState();
+});
+
+// Builder canvas clicks (delete, duplicate, add-child, select)
+document.getElementById('builderCanvas').addEventListener('click', e=>{
+  // Delete
+  const del=e.target.closest('[data-del]');
+  if(del){ removeField(del.dataset.del); renderAll(); saveState(); return; }
+  // Duplicate
+  const dup=e.target.closest('[data-dup]');
+  if(dup){
+    const orig=findField(dup.dataset.dup);
+    if(orig){ const copy=deepClone(orig); copy.id=makeId(); copy.key+='_'+copy.id.slice(-4); insertAfter(dup.dataset.dup,copy); renderAll(); saveState(); } return;
+  }
+  // Add child
+  const addChild=e.target.closest('[data-addchild]');
+  if(addChild){
+    const parent=findField(addChild.dataset.addchild);
+    if(parent){ const c=makeField(addChild.dataset.childtype||'text'); parent.children.push(c); S.selectedId=c.id; renderAll(); saveState(); } return;
+  }
+});
+
+// Builder canvas field property change (on blur, not every keystroke)
+document.getElementById('builderCanvas').addEventListener('change', e=>{
+  const t=e.target;
+  const fid=t.dataset.fid, prop=t.dataset.prop;
+  if(!fid||!prop) return;
+  const field=findField(fid);
+  if(!field) return;
+  field[prop]=prop==='required'?t.checked:t.value;
+  renderAll(); saveState();
+});
+
+// Preview form: text/number/email/textarea/select inputs
+document.getElementById('previewForm').addEventListener('input', e=>{
+  const t=e.target;
+  if(!t.dataset.path) return;
+  if(t.type==='file') return; // handled separately
+  setPath(S.formData, t.dataset.path, t.type==='checkbox'?t.checked:t.value);
+  // Clear required-error highlight once user fills the field
+  if(t.value && t.value.trim()!=='') t.classList.remove('required-error');
+  renderJson(); saveState();
+});
+
+// Preview form: file inputs
+document.getElementById('previewForm').addEventListener('change', e=>{
+  const t=e.target;
+  if(t.type!=='file'||!t.dataset.path) return;
+  const file=t.files[0];
+  const path=t.dataset.path;
+  if(S.filePreviews[path]?.url) URL.revokeObjectURL(S.filePreviews[path].url);
+  if(file){
+    setPath(S.formData,path,file);
+    S.filePreviews[path]={name:file.name, url:file.type.startsWith('image/')?URL.createObjectURL(file):''};
+  } else {
+    setPath(S.formData,path,'');
+    delete S.filePreviews[path];
+  }
+  renderPreview(); renderJson(); saveState();
+});
+
+// Preview form: drag over files
+document.getElementById('previewForm').addEventListener('dragover', e=>{
+  if(e.target.closest('.file-drop')) e.preventDefault();
+});
+document.getElementById('previewForm').addEventListener('drop', e=>{
+  const dz=e.target.closest('.file-drop');
+  if(!dz) return;
+  e.preventDefault();
+  const input=dz.querySelector('input[type=file]');
+  const file=e.dataTransfer?.files?.[0];
+  if(!input||!file) return;
+  const dt=new DataTransfer(); dt.items.add(file); input.files=dt.files;
+  input.dispatchEvent(new Event('change',{bubbles:true}));
+});
+
+// Array add/remove rows
+document.getElementById('previewForm').addEventListener('click', e=>{
+  const addBtn=e.target.closest('[data-array-add]');
+  if(addBtn){
+    const path=addBtn.dataset.arrayAdd;
+    const field=findFieldByPath(path);
+    let rows=getPath(S.formData,path);
+    if(!Array.isArray(rows)){rows=[];setPath(S.formData,path,rows);}
+    rows.push(syncGroupData(field||{children:[]},{}));
+    renderPreview(); renderJson(); saveState(); return;
+  }
+  const remBtn=e.target.closest('[data-array-remove]');
+  if(remBtn){
+    const path=remBtn.dataset.arrayRemove;
+    const idx=Number(remBtn.dataset.idx);
+    const rows=getPath(S.formData,path);
+    if(Array.isArray(rows)){ rows.splice(idx,1); if(!rows.length) rows.push({}); }
+    renderPreview(); renderJson(); saveState();
+  }
+});
+
+function findFieldByPath(path) {
+  const tokens=path.replace(/\[\d+\]/g,'').split('.').filter(Boolean);
+  let fields=S.fields, cur=null;
+  tokens.forEach(k=>{ cur=fields.find(f=>f.key===k)||null; fields=cur?.children||[]; });
+  return cur;
+}
+
+// JSON editor
+document.getElementById('jsonPreview').addEventListener('input', e=>{
+  try{JSON.parse(e.target.value);e.target.classList.remove('json-error');}catch{e.target.classList.add('json-error');}
+});
+document.getElementById('formatJsonBtn').addEventListener('click', ()=>{
+  const ta=document.getElementById('jsonPreview');
+  try{ta.value=JSON.stringify(JSON.parse(ta.value),null,2);ta.classList.remove('json-error');}
+  catch{ta.classList.add('json-error');toast('Invalid JSON','Fix syntax errors first.','error');}
+});
+document.getElementById('applyJsonBtn').addEventListener('click', ()=>{
+  const ta=document.getElementById('jsonPreview');
+  try{
+    const parsed=JSON.parse(ta.value);
+    Object.keys(parsed).forEach(k=>{ if(S.formData[k]!==undefined) S.formData[k]=parsed[k]; });
+    ta.classList.remove('json-error');
+    renderPreview(); saveState();
+    toast('Applied','JSON synced to form.','success');
+  }catch{ta.classList.add('json-error');toast('Invalid JSON','Fix errors before applying.','error');}
+});
+document.getElementById('copyJsonBtn').addEventListener('click', ()=>{
+  navigator.clipboard.writeText(document.getElementById('jsonPreview').value);
+  toast('Copied','JSON copied to clipboard.','success');
+});
+document.getElementById('downloadJsonBtn').addEventListener('click', ()=>{
+  const blob=new Blob([document.getElementById('jsonPreview').value],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'),{href:url,download:'payload.json'}).click();
+  URL.revokeObjectURL(url);
+  toast('Downloaded','Payload downloaded.','success');
+});
+
+// Response tabs
+document.getElementById('responseTabs').addEventListener('click', e=>{
+  const btn=e.target.closest('[data-view]');
+  if(!btn) return;
+  S.responseView=btn.dataset.view;
+  renderResponse();
+});
+document.getElementById('responseHistory').addEventListener('click', e=>{
+  const btn=e.target.closest('[data-hist]');
+  if(!btn) return;
+  S.activeResponse=S.responses[Number(btn.dataset.hist)]||null;
+  renderResponse();
+});
+document.getElementById('clearResponsesBtn').addEventListener('click', ()=>{
+  S.responses=[]; S.activeResponse=null; renderResponse(); saveState();
+  toast('Cleared','Response history cleared.','success');
+});
+
+// ─────────────────────────────────────────────
+// REQUIRED FIELD VALIDATION
+// ─────────────────────────────────────────────
+function validateRequiredFields() {
+  // Collect all required field paths recursively
+  const errors = [];
+  function collectErrors(fields, prefix) {
+    for (const field of fields) {
+      const path = prefix ? `${prefix}.${field.key}` : field.key;
+      if (field.type === 'group') {
+        collectErrors(field.children || [], path);
+        continue;
+      }
+      if (field.type === 'array') {
+        const rows = Array.isArray(S.formData[field.key]) ? S.formData[field.key] : [];
+        rows.forEach((row, i) => collectErrors(field.children || [], `${path}[${i}]`));
+        continue;
+      }
+      if (!field.required) continue;
+      // Get value from formData by path
+      const val = getByPath(S.formData, path);
+      const isEmpty =
+        val === undefined || val === null || val === '' ||
+        (Array.isArray(val) && val.length === 0) ||
+        (val instanceof File === false && typeof val === 'object' && !(val instanceof File) && Object.keys(val||{}).length === 0);
+      if (isEmpty) errors.push({ field, path });
+    }
+  }
+  collectErrors(S.fields, '');
+
+  // Clear previous error styles
+  document.querySelectorAll('.required-error').forEach(el => el.classList.remove('required-error'));
+
+  if (errors.length === 0) return true;
+
+  // Highlight each failing input and scroll to first
+  let firstEl = null;
+  errors.forEach(({ path }) => {
+    const el = document.querySelector(`[data-path="${CSS.escape(path)}"]`);
+    if (el) {
+      el.classList.add('required-error');
+      if (!firstEl) firstEl = el;
+    }
+  });
+  if (firstEl) {
+    firstEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    firstEl.focus();
+  }
+
+  const names = errors.map(e => e.field.label).join(', ');
+  toast('Required fields missing', `Please fill: ${names}`, 'error');
+  return false;
+}
+
+function getByPath(obj, path) {
+  // Supports dot notation and array indices like "group.arr[0].key"
+  const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.');
+  let cur = obj;
+  for (const p of parts) {
+    if (cur == null) return undefined;
+    cur = cur[p];
+  }
+  return cur;
+}
+
+// Webhook submit
+document.getElementById('submitWebhookBtn').addEventListener('click', async ()=>{
+  if(!S.webhookUrl){toast('Missing URL','Enter a webhook URL first.','error');return;}
+  if(!validateRequiredFields()) return;
+  const btn=document.getElementById('submitWebhookBtn');
+  btn.disabled=true; btn.classList.add('is-loading'); btn.textContent='Sending…';
+  try{
+    const payload=await buildPayload();
+    const t0=performance.now();
+    const useMultipart=S.settings.imageMode==='multipart'&&hasFile(S.fields,S.formData);
+    let resp;
+    if(useMultipart){
+      const fd=new FormData();
+      flattenToFormData(payload,fd,'');
+      resp=await axios.post(S.webhookUrl,fd);
+    } else {
+      resp=await axios.post(S.webhookUrl,payload,{headers:{'Content-Type':'application/json'}});
+    }
+    const response={status:resp.status,statusText:resp.statusText,headers:resp.headers,data:resp.data,
+      timeMs:Math.round(performance.now()-t0),size:JSON.stringify(resp.data??'').length,
+      receivedAt:new Date().toISOString(),requestMode:useMultipart?'multipart':'json'};
+    S.responses=[response,...S.responses].slice(0,8);
+    S.activeResponse=response;
+    renderResponse(); saveState();
+    toast('Sent',`${response.status} received.`,response.status>=400?'error':'success');
+  }catch(err){
+    const response={status:err.response?.status||500,statusText:err.response?.statusText||err.message,
+      headers:err.response?.headers||{},data:err.response?.data||{error:err.message},
+      timeMs:0,size:0,receivedAt:new Date().toISOString(),requestMode:'json'};
+    S.responses=[response,...S.responses].slice(0,8);
+    S.activeResponse=response;
+    renderResponse(); saveState();
+    toast('Failed',err.message||'Request failed.','error');
+  }finally{
+    btn.disabled=false; btn.classList.remove('is-loading'); btn.textContent='Submit to Webhook';
+  }
+});
+
+async function buildPayload() {
+  const out={};
+  for(const f of S.fields) out[f.key]=await buildFieldVal(f,S.formData[f.key]);
+  return out;
+}
+async function buildFieldVal(field,val) {
+  if(field.type==='group'){
+    const out={};
+    for(const c of field.children||[]) out[c.key]=await buildFieldVal(c,val?.[c.key]);
+    return out;
+  }
+  if(field.type==='array'){
+    const rows=Array.isArray(val)?val:[];
+    return Promise.all(rows.map(async row=>{
+      const out={};
+      for(const c of field.children||[]) out[c.key]=await buildFieldVal(c,row?.[c.key]);
+      return out;
+    }));
+  }
+  if((field.type==='image'||field.type==='file')&&val instanceof File){
+    if(S.settings.imageMode==='multipart') return val;
+    if(S.settings.imageMode==='binary'){
+      const buf=await val.arrayBuffer();
+      return {name:val.name,type:val.type,bytes:Array.from(new Uint8Array(buf))};
+    }
+    return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(val);});
+  }
+  if(field.type==='number') return val===''||val==null?'':isNaN(Number(val))?val:Number(val);
+  if(field.type==='checkbox') return Boolean(val);
+  return val??'';
+}
+function hasFile(fields,data) {
+  return fields.some(f=>{
+    if(f.type==='image'||f.type==='file') return data[f.key] instanceof File;
+    if(f.children?.length) return hasFile(f.children,data[f.key]||{});
+    return false;
+  });
+}
+function flattenToFormData(obj,fd,prefix) {
+  Object.entries(obj||{}).forEach(([k,v])=>{
+    const key=prefix?`${prefix}[${k}]`:k;
+    if(v instanceof File){fd.append(key,v);return;}
+    if(Array.isArray(v)){v.forEach((item,i)=>flattenToFormData({[i]:item},fd,key));return;}
+    if(v&&typeof v==='object'){flattenToFormData(v,fd,key);return;}
+    fd.append(key,v??'');
+  });
+}
+
+// Sidebar controls
+document.getElementById('saveWebhookBtn').addEventListener('click', ()=>{
+  S.webhookUrl=document.getElementById('webhookUrl').value;
+  saveState(); toast('Saved','Webhook URL saved.','success');
+});
+document.getElementById('webhookUrl').addEventListener('input', e=>{ S.webhookUrl=e.target.value; });
+
+document.getElementById('saveTemplateBtn').addEventListener('click', ()=>{
+  const name=window.prompt('Template name:');
+  if(!name) return;
+  S.templates=[{id:makeId(),name,webhookUrl:S.webhookUrl,fields:deepClone(S.fields)},
+    ...S.templates.filter(t=>t.name!==name)];
+  populateTemplates(); saveState(); toast('Saved',`"${name}" saved.`,'success');
+});
+document.getElementById('loadTemplateBtn').addEventListener('click', ()=>{
+  const tpl=S.templates.find(t=>t.id===document.getElementById('templateSelect').value);
+  if(!tpl) return;
+  S.webhookUrl=tpl.webhookUrl||''; document.getElementById('webhookUrl').value=S.webhookUrl;
+  S.fields=deepClone(tpl.fields); S.selectedId=null;
+  renderAll(); saveState(); toast('Loaded',`Loaded "${tpl.name}".`,'success');
+});
+document.getElementById('deleteTemplateBtn').addEventListener('click', ()=>{
+  const id=document.getElementById('templateSelect').value;
+  S.templates=S.templates.filter(t=>t.id!==id);
+  populateTemplates(); saveState(); toast('Deleted','Template removed.','success');
+});
+function populateTemplates() {
+  document.getElementById('templateSelect').innerHTML=S.templates.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+}
+
+document.getElementById('imageMode').addEventListener('change', e=>{ S.settings.imageMode=e.target.value; saveState(); });
+document.getElementById('accentColor').addEventListener('input', e=>{ S.settings.accentColor=e.target.value; applyTheme(); saveState(); });
+document.getElementById('animationsToggle').addEventListener('change', e=>{ S.settings.animations=e.target.checked; applyTheme(); saveState(); });
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  S.settings.theme=S.settings.theme==='dark'?'light':'dark'; applyTheme(); saveState();
+});
+document.getElementById('newFormBtn').addEventListener('click', ()=>{
+  S.fields=[]; S.formData={}; S.selectedId=null;
+  Object.values(S.filePreviews).forEach(p=>{if(p.url)URL.revokeObjectURL(p.url);}); S.filePreviews={};
+  renderAll(); saveState(); toast('Reset','New form started.','success');
+});
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const data=JSON.stringify({webhookUrl:S.webhookUrl,fields:S.fields,settings:S.settings,exportedAt:new Date().toISOString()},null,2);
+  const url=URL.createObjectURL(new Blob([data],{type:'application/json'}));
+  Object.assign(document.createElement('a'),{href:url,download:'webhook-form-config.json'}).click();
+  URL.revokeObjectURL(url); toast('Exported','Config exported.','success');
+});
+document.getElementById('importInput').addEventListener('change', async e=>{
+  const file=e.target.files?.[0]; if(!file) return;
+  try{
+    const data=JSON.parse(await file.text());
+    S.webhookUrl=data.webhookUrl||''; S.fields=data.fields||[];
+    if(data.settings) Object.assign(S.settings,data.settings);
+    document.getElementById('webhookUrl').value=S.webhookUrl;
+    document.getElementById('imageMode').value=S.settings.imageMode;
+    document.getElementById('accentColor').value=S.settings.accentColor;
+    document.getElementById('animationsToggle').checked=S.settings.animations;
+    applyTheme(); renderAll(); saveState(); toast('Imported','Config loaded.','success');
+  }catch{ toast('Error','Failed to parse JSON config.','error'); }
+  e.target.value='';
+});
+
+// ─────────────────────────────────────────────
+// THEME
+// ─────────────────────────────────────────────
+function applyTheme() {
+  document.body.classList.toggle('light-theme', S.settings.theme==='light');
+  document.body.classList.toggle('reduce-motion', !S.settings.animations);
+  document.documentElement.style.setProperty('--accent', S.settings.accentColor);
+}
+
+// ─────────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────────
+function toast(title, msg, tone='success') {
+  const d=document.createElement('div');
+  d.className=`toast ${tone}`;
+  d.innerHTML=`<strong>${esc(title)}</strong><p>${esc(msg)}</p>`;
+  document.getElementById('toastStack').appendChild(d);
+  setTimeout(()=>{ d.style.opacity='0'; d.style.transform='translateY(8px)'; setTimeout(()=>d.remove(),250); }, 2800);
+}
+
+// ─────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────
+applyTheme();
+populateTemplates();
+document.getElementById('webhookUrl').value=S.webhookUrl;
+document.getElementById('imageMode').value=S.settings.imageMode;
+document.getElementById('accentColor').value=S.settings.accentColor;
+document.getElementById('animationsToggle').checked=S.settings.animations;
+syncFormData();
+renderBuilder();
+renderPreview();
+renderJson();
+renderResponse();
+</script>
+</body>
+</html>
