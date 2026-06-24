@@ -2,7 +2,7 @@
 
 > A lightweight, browser-based tool to visually build forms, preview live JSON payloads, and send data directly to any webhook endpoint — built for n8n and compatible with any REST API.
 
-![Webhook Form Builder UI](./Screenshot 2026-06-24 141734.png)
+![Webhook Form Builder UI](Screenshot 2026-06-24 141734.png)
 
 ---
 
